@@ -30,6 +30,11 @@
                     <span>Inventory</span>
                 </router-link>
 
+                <router-link to="/categories" class="nav-item" active-class="nav-item-active">
+                    <component :is="Layers" class="nav-icon" />
+                    <span>Categories</span>
+                </router-link>
+
                 <router-link to="/sales" class="nav-item" active-class="nav-item-active">
                     <component :is="ShoppingCart" class="nav-icon" />
                     <span>Sales / POS</span>
@@ -92,7 +97,7 @@
 </template>
 
 <script setup>
-import { LayoutDashboard, Package, Users, ShoppingCart, History, Bell, Settings, Search } from 'lucide-vue-next';
+import { LayoutDashboard, Package, Layers, Users, ShoppingCart, History, Bell, Settings, Search } from 'lucide-vue-next';
 </script>
 
 <style scoped>

@@ -56,101 +56,176 @@
                     </BaseButton>
                 </div>
 
-                <!-- Cart Items -->
-                <div class="cart-items">
-                    <div v-if="transactionStore.cart.length === 0" class="empty-cart">
-                        <component :is="ShoppingCart" class="empty-icon" />
-                        <p>No items in cart</p>
-                        <p class="empty-hint">Click on products to add them</p>
+                <!-- Scrollable Content Area -->
+                <div class="cart-scroll-area">
+                    <!-- Cart Items -->
+                    <div class="cart-items">
+                        <div v-if="transactionStore.cart.length === 0" class="empty-cart">
+                            <component :is="ShoppingCart" class="empty-icon" />
+                            <p>No items in cart</p>
+                            <p class="empty-hint">Click on products to add them</p>
+                        </div>
+                        <div 
+                            v-else
+                            v-for="item in transactionStore.cart" 
+                            :key="item.product_id"
+                            class="cart-item"
+                        >
+                            <div class="item-info">
+                                <p class="item-name">{{ item.name }}</p>
+                                <p class="item-price">${{ item.price }} each</p>
+                            </div>
+                            <div class="item-controls">
+                                <button 
+                                    class="qty-btn"
+                                    @click="updateQuantity(item.product_id, item.quantity - 1)"
+                                >
+                                    <component :is="Minus" class="w-4 h-4" />
+                                </button>
+                                <span class="qty-display">{{ item.quantity }}</span>
+                                <button 
+                                    class="qty-btn"
+                                    @click="updateQuantity(item.product_id, item.quantity + 1)"
+                                    :disabled="item.quantity >= item.stock_quantity"
+                                >
+                                    <component :is="Plus" class="w-4 h-4" />
+                                </button>
+                            </div>
+                            <div class="item-total">
+                                ${{ (item.price * item.quantity).toFixed(2) }}
+                            </div>
+                            <button 
+                                class="remove-btn"
+                                @click="transactionStore.removeFromCart(item.product_id)"
+                            >
+                                <component :is="X" class="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
-                    <div 
-                        v-else
-                        v-for="item in transactionStore.cart" 
-                        :key="item.product_id"
-                        class="cart-item"
+
+                    <!-- Client Selection -->
+                    <div v-if="transactionStore.cart.length > 0" class="client-section">
+                        <BaseInput
+                            v-model="selectedClientId"
+                            type="select"
+                            label="Client (Optional)"
+                            :options="clientOptions"
+                            placeholder="Cash Sale"
+                        />
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div v-if="transactionStore.cart.length > 0" class="payment-section">
+                        <label class="section-label">Payment Method</label>
+                        <div class="payment-options">
+                            <button 
+                                v-for="method in paymentMethods" 
+                                :key="method.value"
+                                class="payment-btn"
+                                :class="{ active: paymentMethod === method.value }"
+                                @click="paymentMethod = method.value"
+                            >
+                                <component :is="method.icon" class="w-5 h-5" />
+                                {{ method.label }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Discount Section -->
+                    <div v-if="transactionStore.cart.length > 0" class="discount-section">
+                        <div class="discount-header">
+                            <label class="section-label">Discount</label>
+                            <div class="discount-type-toggle">
+                                <button 
+                                    class="type-btn"
+                                    :class="{ active: discountType === 'percentage' }"
+                                    @click="discountType = 'percentage'"
+                                >
+                                    <component :is="Percent" class="w-4 h-4" />
+                                </button>
+                                <button 
+                                    class="type-btn"
+                                    :class="{ active: discountType === 'fixed' }"
+                                    @click="discountType = 'fixed'"
+                                >
+                                    <component :is="DollarSign" class="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <div class="discount-input-wrapper">
+                            <input 
+                                v-model.number="discountValue"
+                                type="number"
+                                min="0"
+                                :max="discountType === 'percentage' ? 100 : transactionStore.cartTotal"
+                                step="0.01"
+                                class="discount-input"
+                                :placeholder="discountType === 'percentage' ? '0%' : '$0.00'"
+                            />
+                            <span class="discount-suffix">{{ discountType === 'percentage' ? '%' : '$' }}</span>
+                        </div>
+                    </div>
+
+                    <!-- VAT Section -->
+                    <div v-if="transactionStore.cart.length > 0" class="vat-section">
+                        <div class="vat-toggle-row">
+                            <label class="section-label">VAT / Tax</label>
+                            <button 
+                                class="vat-toggle"
+                                :class="{ active: vatEnabled }"
+                                @click="vatEnabled = !vatEnabled"
+                            >
+                                <span class="toggle-track">
+                                    <span class="toggle-thumb"></span>
+                                </span>
+                            </button>
+                        </div>
+                        <div v-if="vatEnabled" class="vat-rate-input">
+                            <input 
+                                v-model.number="vatRate"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.1"
+                                class="discount-input"
+                            />
+                            <span class="discount-suffix">%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fixed Bottom Section -->
+                <div v-if="transactionStore.cart.length > 0" class="cart-footer">
+                    <!-- Totals -->
+                    <div class="totals-section">
+                        <div class="total-row">
+                            <span>Subtotal</span>
+                            <span>${{ transactionStore.cartTotal.toFixed(2) }}</span>
+                        </div>
+                        <div v-if="discountAmount > 0" class="total-row discount-row">
+                            <span>Discount {{ discountType === 'percentage' ? `(${discountValue}%)` : '' }}</span>
+                            <span>-${{ discountAmount.toFixed(2) }}</span>
+                        </div>
+                        <div v-if="vatEnabled && vatAmount > 0" class="total-row vat-row">
+                            <span>VAT ({{ vatRate }}%)</span>
+                            <span>+${{ vatAmount.toFixed(2) }}</span>
+                        </div>
+                        <div class="total-row total-final">
+                            <span>Total</span>
+                            <span>${{ grandTotal.toFixed(2) }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Checkout Button -->
+                    <BaseButton 
+                        class="checkout-btn"
+                        size="lg"
+                        :loading="processing"
+                        @click="processTransaction"
                     >
-                        <div class="item-info">
-                            <p class="item-name">{{ item.name }}</p>
-                            <p class="item-price">${{ item.price }} each</p>
-                        </div>
-                        <div class="item-controls">
-                            <button 
-                                class="qty-btn"
-                                @click="updateQuantity(item.product_id, item.quantity - 1)"
-                            >
-                                <component :is="Minus" class="w-4 h-4" />
-                            </button>
-                            <span class="qty-display">{{ item.quantity }}</span>
-                            <button 
-                                class="qty-btn"
-                                @click="updateQuantity(item.product_id, item.quantity + 1)"
-                                :disabled="item.quantity >= item.stock_quantity"
-                            >
-                                <component :is="Plus" class="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div class="item-total">
-                            ${{ (item.price * item.quantity).toFixed(2) }}
-                        </div>
-                        <button 
-                            class="remove-btn"
-                            @click="transactionStore.removeFromCart(item.product_id)"
-                        >
-                            <component :is="X" class="w-4 h-4" />
-                        </button>
-                    </div>
+                        Complete Sale
+                    </BaseButton>
                 </div>
-
-                <!-- Client Selection -->
-                <div v-if="transactionStore.cart.length > 0" class="client-section">
-                    <BaseInput
-                        v-model="selectedClientId"
-                        type="select"
-                        label="Client (Optional)"
-                        :options="clientOptions"
-                        placeholder="Cash Sale"
-                    />
-                </div>
-
-                <!-- Payment Method -->
-                <div v-if="transactionStore.cart.length > 0" class="payment-section">
-                    <label class="section-label">Payment Method</label>
-                    <div class="payment-options">
-                        <button 
-                            v-for="method in paymentMethods" 
-                            :key="method.value"
-                            class="payment-btn"
-                            :class="{ active: paymentMethod === method.value }"
-                            @click="paymentMethod = method.value"
-                        >
-                            <component :is="method.icon" class="w-5 h-5" />
-                            {{ method.label }}
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Totals -->
-                <div v-if="transactionStore.cart.length > 0" class="totals-section">
-                    <div class="total-row">
-                        <span>Subtotal</span>
-                        <span>${{ transactionStore.cartTotal.toFixed(2) }}</span>
-                    </div>
-                    <div class="total-row total-final">
-                        <span>Total</span>
-                        <span>${{ transactionStore.cartTotal.toFixed(2) }}</span>
-                    </div>
-                </div>
-
-                <!-- Checkout Button -->
-                <BaseButton 
-                    v-if="transactionStore.cart.length > 0"
-                    class="checkout-btn"
-                    size="lg"
-                    :loading="processing"
-                    @click="processTransaction"
-                >
-                    Complete Sale
-                </BaseButton>
             </div>
         </div>
     </div>
@@ -165,7 +240,7 @@ import BaseButton from '../components/BaseButton.vue';
 import BaseInput from '../components/BaseInput.vue';
 import { 
     Search, Plus, Minus, X, ShoppingCart, 
-    CreditCard, Banknote, Wallet 
+    CreditCard, Banknote, Wallet, Percent, DollarSign 
 } from 'lucide-vue-next';
 
 const productStore = useProductStore();
@@ -176,6 +251,12 @@ const searchQuery = ref('');
 const selectedClientId = ref('');
 const paymentMethod = ref('cash');
 const processing = ref(false);
+
+// Discount and VAT
+const discountType = ref('percentage'); // 'percentage' or 'fixed'
+const discountValue = ref(0);
+const vatEnabled = ref(false);
+const vatRate = ref(13); // Default VAT rate 13%
 
 const paymentMethods = [
     { value: 'cash', label: 'Cash', icon: Banknote },
@@ -201,6 +282,29 @@ const clientOptions = computed(() => {
             label: client.name
         }))
     ];
+});
+
+// Discount and VAT calculations
+const discountAmount = computed(() => {
+    if (!discountValue.value || discountValue.value <= 0) return 0;
+    
+    if (discountType.value === 'percentage') {
+        return (transactionStore.cartTotal * discountValue.value) / 100;
+    }
+    return Math.min(discountValue.value, transactionStore.cartTotal);
+});
+
+const subtotalAfterDiscount = computed(() => {
+    return Math.max(0, transactionStore.cartTotal - discountAmount.value);
+});
+
+const vatAmount = computed(() => {
+    if (!vatEnabled.value || vatRate.value <= 0) return 0;
+    return (subtotalAfterDiscount.value * vatRate.value) / 100;
+});
+
+const grandTotal = computed(() => {
+    return subtotalAfterDiscount.value + vatAmount.value;
 });
 
 onMounted(async () => {
@@ -232,7 +336,14 @@ const processTransaction = async () => {
         const transactionData = {
             type: 'sale',
             client_id: selectedClientId.value || null,
-            total_amount: transactionStore.cartTotal,
+            subtotal: transactionStore.cartTotal,
+            discount_type: discountValue.value > 0 ? discountType.value : null,
+            discount_value: discountValue.value > 0 ? discountValue.value : 0,
+            discount_amount: discountAmount.value,
+            vat_enabled: vatEnabled.value,
+            vat_rate: vatEnabled.value ? vatRate.value : 0,
+            vat_amount: vatAmount.value,
+            total_amount: grandTotal.value,
             status: 'completed',
             payment_status: paymentMethod.value === 'credit' ? 'credit' : 'paid',
             date: new Date().toISOString(),
@@ -243,7 +354,7 @@ const processTransaction = async () => {
                 total: item.price * item.quantity
             })),
             payments: paymentMethod.value !== 'credit' ? [{
-                amount: transactionStore.cartTotal,
+                amount: grandTotal.value,
                 method: paymentMethod.value,
                 date: new Date().toISOString()
             }] : []
@@ -261,6 +372,9 @@ const processTransaction = async () => {
         transactionStore.clearCart();
         selectedClientId.value = '';
         paymentMethod.value = 'cash';
+        discountType.value = 'percentage';
+        discountValue.value = 0;
+        vatEnabled.value = false;
         
         alert('Sale completed successfully!');
     } catch (error) {
@@ -292,6 +406,18 @@ const processTransaction = async () => {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.cart-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.cart-footer {
+    flex-shrink: 0;
+    border-top: 2px solid var(--color-gray-200);
+    background: var(--color-gray-50);
 }
 
 .panel-header {
@@ -394,12 +520,11 @@ const processTransaction = async () => {
 }
 
 .cart-items {
-    flex: 1;
-    overflow-y: auto;
     padding: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    min-height: 120px;
 }
 
 .empty-cart {
@@ -506,10 +631,148 @@ const processTransaction = async () => {
 }
 
 .client-section,
-.payment-section {
+.payment-section,
+.discount-section,
+.vat-section {
     padding: 0 1.5rem 1rem 1.5rem;
     border-top: 1px solid var(--color-gray-200);
     padding-top: 1rem;
+}
+
+/* Discount Section Styles */
+.discount-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.discount-header .section-label {
+    margin-bottom: 0;
+}
+
+.discount-type-toggle {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--color-gray-100);
+    padding: 0.25rem;
+    border-radius: var(--radius-md);
+}
+
+.type-btn {
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-gray-500);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.type-btn:hover {
+    color: var(--color-gray-700);
+}
+
+.type-btn.active {
+    background: white;
+    color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.discount-input-wrapper,
+.vat-rate-input {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.discount-input {
+    width: 100%;
+    padding: 0.75rem 2.5rem 0.75rem 1rem;
+    border: 2px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-gray-900);
+    transition: all var(--transition-base);
+    background: var(--color-gray-50);
+}
+
+.discount-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    background: white;
+}
+
+.discount-input::-webkit-outer-spin-button,
+.discount-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.discount-suffix {
+    position: absolute;
+    right: 1rem;
+    font-weight: 700;
+    color: var(--color-gray-500);
+    font-size: var(--font-size-base);
+}
+
+/* VAT Section Styles */
+.vat-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.vat-toggle-row .section-label {
+    margin-bottom: 0;
+}
+
+.vat-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+
+.toggle-track {
+    display: block;
+    width: 3rem;
+    height: 1.75rem;
+    background: var(--color-gray-300);
+    border-radius: var(--radius-full);
+    position: relative;
+    transition: all var(--transition-base);
+}
+
+.vat-toggle.active .toggle-track {
+    background: var(--color-primary);
+}
+
+.toggle-thumb {
+    position: absolute;
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: white;
+    border-radius: 50%;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-base);
+}
+
+.vat-toggle.active .toggle-thumb {
+    left: calc(100% - 1.5rem);
+}
+
+.vat-rate-input {
+    margin-top: 0.5rem;
 }
 
 .section-label {
@@ -553,10 +816,10 @@ const processTransaction = async () => {
 
 .totals-section {
     padding: 1rem 1.5rem;
-    border-top: 1px solid var(--color-gray-200);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    background: var(--color-gray-50);
 }
 
 .total-row {
@@ -564,6 +827,22 @@ const processTransaction = async () => {
     justify-content: space-between;
     font-size: var(--font-size-base);
     color: var(--color-gray-700);
+}
+
+.discount-row {
+    color: var(--color-green-600);
+}
+
+.discount-row span:last-child {
+    font-weight: 600;
+}
+
+.vat-row {
+    color: var(--color-gray-600);
+}
+
+.vat-row span:last-child {
+    font-weight: 500;
 }
 
 .total-final {
@@ -577,6 +856,10 @@ const processTransaction = async () => {
 .checkout-btn {
     margin: 0 1.5rem 1.5rem 1.5rem;
     width: calc(100% - 3rem);
+}
+
+.cart-footer .checkout-btn {
+    margin-top: 0;
 }
 
 .loading-state {

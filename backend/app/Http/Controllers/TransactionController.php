@@ -29,27 +29,75 @@ class TransactionController extends Controller
             'client_id' => 'nullable|exists:clients,id',
             'type' => 'required|in:sale,purchase',
             'status' => 'required|in:pending,completed,cancelled',
-            'payment_status' => 'required|in:unpaid,partial,paid',
+            'payment_status' => 'required|in:unpaid,partial,paid,credit',
             'date' => 'required|date',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric|min:0', // Unit price
+            // Discount fields
+            'discount_type' => 'nullable|in:percentage,fixed',
+            'discount_value' => 'nullable|numeric|min:0',
+            'discount_amount' => 'nullable|numeric|min:0',
+            // VAT fields
+            'vat_enabled' => 'nullable|boolean',
+            'vat_rate' => 'nullable|numeric|min:0|max:100',
+            'vat_amount' => 'nullable|numeric|min:0',
+            // Total
+            'subtotal' => 'nullable|numeric|min:0',
+            'total_amount' => 'nullable|numeric|min:0',
         ]);
 
         return DB::transaction(function () use ($validated) {
-            // calculated total
-            $totalAmount = 0;
+            // Calculate subtotal from items
+            $subtotal = 0;
             foreach ($validated['items'] as $item) {
-                $totalAmount += $item['quantity'] * $item['price'];
+                $subtotal += $item['quantity'] * $item['price'];
             }
+
+            // Get discount values
+            $discountType = $validated['discount_type'] ?? null;
+            $discountValue = $validated['discount_value'] ?? 0;
+            $discountAmount = $validated['discount_amount'] ?? 0;
+
+            // If discount_amount not provided, calculate it
+            if ($discountValue > 0 && $discountAmount == 0) {
+                if ($discountType === 'percentage') {
+                    $discountAmount = ($subtotal * $discountValue) / 100;
+                } else {
+                    $discountAmount = min($discountValue, $subtotal);
+                }
+            }
+
+            // Subtotal after discount
+            $subtotalAfterDiscount = max(0, $subtotal - $discountAmount);
+
+            // Get VAT values
+            $vatEnabled = $validated['vat_enabled'] ?? false;
+            $vatRate = $validated['vat_rate'] ?? 0;
+            $vatAmount = $validated['vat_amount'] ?? 0;
+
+            // If vat_amount not provided, calculate it
+            if ($vatEnabled && $vatRate > 0 && $vatAmount == 0) {
+                $vatAmount = ($subtotalAfterDiscount * $vatRate) / 100;
+            }
+
+            // Calculate final total
+            $totalAmount = $validated['total_amount'] ?? ($subtotalAfterDiscount + $vatAmount);
 
             $transaction = Transaction::create([
                 'client_id' => $validated['client_id'] ?? null,
                 'type' => $validated['type'],
                 'status' => $validated['status'],
                 'payment_status' => $validated['payment_status'],
+                'subtotal' => $subtotal,
+                'discount_type' => $discountType,
+                'discount_value' => $discountValue,
+                'discount_amount' => $discountAmount,
+                'vat_enabled' => $vatEnabled,
+                'vat_rate' => $vatRate,
+                'vat_amount' => $vatAmount,
                 'total_amount' => $totalAmount,
                 'date' => $validated['date'],
                 'notes' => $validated['notes'] ?? null,
@@ -100,7 +148,7 @@ class TransactionController extends Controller
             if ($transaction->client_id) {
                 $client = Client::find($transaction->client_id);
                 if ($transaction->type === 'sale') {
-                    $client->increment('current_balance', $totalAmount);
+                    $client->increment('current_balance', $transaction->total_amount);
                 }
                 // If it's a return or purchase from client? Less common, but let's leave it for now.
             }

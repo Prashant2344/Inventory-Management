@@ -1,13 +1,27 @@
 version: '3.8'
 
 services:
-  backend:
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: inventory_nginx
+    ports:
+      - "8000:80"
+    depends_on:
+      - backend1
+      - backend2
+      - backend3
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend1:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    container_name: inventory_backend
-    ports:
-      - "8000:8000"
+    container_name: inventory_backend_1
+    hostname: backend1
     volumes:
       - ./backend:/var/www/html
     environment:
@@ -17,10 +31,56 @@ services:
       DB_DATABASE: inventory
       DB_USERNAME: user
       DB_PASSWORD: password
+      INSTANCE_ID: backend1
     depends_on:
       - db
     networks:
       - app-network
+    restart: unless-stopped
+
+  backend2:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: inventory_backend_2
+    hostname: backend2
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: inventory
+      DB_USERNAME: user
+      DB_PASSWORD: password
+      INSTANCE_ID: backend2
+    depends_on:
+      - db
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend3:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: inventory_backend_3
+    hostname: backend3
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: inventory
+      DB_USERNAME: user
+      DB_PASSWORD: password
+      INSTANCE_ID: backend3
+    depends_on:
+      - db
+    networks:
+      - app-network
+    restart: unless-stopped
 
   frontend:
     build:

@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
-    libpq-dev
+    libpq-dev \
+    nginx \
+    supervisor
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -20,11 +22,19 @@ RUN docker-php-ext-install pdo_pgsql mbstring exif pcntl bcmath gd
 # Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Copy configuration files
+COPY docker/backend/nginx.conf /etc/nginx/sites-available/default
+COPY docker/backend/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
+COPY docker/backend/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
 # Set working directory
 WORKDIR /var/www/html
 
-# Expose port (if we were using `artisan serve` or similar, but FPM uses 9000 by default. 
-# We'll use artisan serve for dev simplicity or setup a proper nginx.
-# User asked for "Backend in Laravel", running on single network.
-# For dev, `php artisan serve` is easiest to expose on 8000.
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+# Create required directories
+RUN mkdir -p /var/log/supervisor /run/php
+
+# Expose port 80 (nginx)
+EXPOSE 80
+
+# Start supervisor (manages nginx + php-fpm)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
